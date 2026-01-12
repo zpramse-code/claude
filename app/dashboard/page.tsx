@@ -1,8 +1,10 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { FileText, Image, Music, Video, File, LogOut, Upload } from 'lucide-react'
+import { FileText, File, LogOut, Upload } from 'lucide-react'
+import { UploadDocumentDialog } from '@/components/upload-document-dialog'
+import { DocumentCard } from '@/components/document-card'
 
 async function getDocuments(userId: string) {
   const supabase = await createClient()
@@ -29,17 +31,6 @@ async function getProfile(userId: string) {
     .single()
 
   return data
-}
-
-function getFileIcon(fileType: string | null) {
-  if (!fileType) return <File className="h-12 w-12" />
-
-  if (fileType.startsWith('image/')) return <Image className="h-12 w-12" />
-  if (fileType.startsWith('video/')) return <Video className="h-12 w-12" />
-  if (fileType.startsWith('audio/')) return <Music className="h-12 w-12" />
-  if (fileType.includes('pdf') || fileType.includes('document')) return <FileText className="h-12 w-12" />
-
-  return <File className="h-12 w-12" />
 }
 
 function formatFileSize(bytes: number | null) {
@@ -154,10 +145,7 @@ export default async function DashboardPage() {
               A curated collection of your creative works
             </p>
           </div>
-          <Button>
-            <Upload className="mr-2 h-4 w-4" />
-            Upload Document
-          </Button>
+          <UploadDocumentDialog />
         </div>
 
         {/* Documents Grid */}
@@ -171,41 +159,13 @@ export default async function DashboardPage() {
               <p className="text-muted-foreground text-center mb-6 max-w-md">
                 Start building your creative collection by uploading your first document
               </p>
-              <Button>
-                <Upload className="mr-2 h-4 w-4" />
-                Upload Your First Document
-              </Button>
+              <UploadDocumentDialog />
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {documents.map((doc) => (
-              <Card key={doc.id} className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-                <CardHeader className="space-y-1">
-                  <div className="flex items-start justify-between">
-                    <div className="rounded-lg bg-muted p-3 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                      {getFileIcon(doc.file_type)}
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(doc.created_at)}
-                    </span>
-                  </div>
-                  <CardTitle className="line-clamp-1">{doc.title}</CardTitle>
-                  <CardDescription className="line-clamp-2">
-                    {doc.description || 'No description provided'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {formatFileSize(doc.file_size)}
-                    </span>
-                    <Button variant="ghost" size="sm">
-                      View Details
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              <DocumentCard key={doc.id} document={doc} />
             ))}
           </div>
         )}
