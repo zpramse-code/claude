@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { FileText, Image, Music, Video, File, Sparkles, Loader2 } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { FileText, Image, Music, Video, File, Sparkles, Loader2, FileEdit, Copy, Check } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -58,10 +59,21 @@ function formatDate(dateString: string) {
 }
 
 export function DocumentCard({ document }: { document: Document }) {
+  // Review state
   const [reviewing, setReviewing] = useState(false)
   const [showReview, setShowReview] = useState(false)
   const [analysis, setAnalysis] = useState<ReviewAnalysis | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Grant draft state
+  const [showGrantQuestion, setShowGrantQuestion] = useState(false)
+  const [grantQuestion, setGrantQuestion] = useState('')
+  const [generatingGrant, setGeneratingGrant] = useState(false)
+  const [grantDraft, setGrantDraft] = useState('')
+  const [wordCount, setWordCount] = useState(0)
+  const [showGrantDraft, setShowGrantDraft] = useState(false)
+  const [grantError, setGrantError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const handleReview = async () => {
     setReviewing(true)
@@ -91,6 +103,54 @@ export function DocumentCard({ document }: { document: Document }) {
     }
   }
 
+  const handleGenerateGrant = async () => {
+    if (!grantQuestion.trim()) {
+      setGrantError('Please enter a grant question')
+      return
+    }
+
+    setGeneratingGrant(true)
+    setGrantError(null)
+
+    try {
+      const response = await fetch('/api/grant-draft', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          documentId: document.id,
+          grantQuestion: grantQuestion
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Grant generation failed')
+      }
+
+      setGrantDraft(data.grantDraft)
+      setWordCount(data.wordCount)
+      setShowGrantQuestion(false)
+      setShowGrantDraft(true)
+    } catch (err) {
+      setGrantError(err instanceof Error ? err.message : 'Failed to generate grant draft')
+    } finally {
+      setGeneratingGrant(false)
+    }
+  }
+
+  const handleCopyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(grantDraft)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
+
   return (
     <>
       <Card className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
@@ -109,37 +169,56 @@ export function DocumentCard({ document }: { document: Document }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm text-muted-foreground">
-              {formatFileSize(document.file_size)}
-            </span>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleReview}
-              disabled={reviewing}
-            >
-              {reviewing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Reviewing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Review
-                </>
-              )}
-            </Button>
-          </div>
-          {error && (
-            <div className="mt-2 text-xs text-destructive">
-              {error}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                {formatFileSize(document.file_size)}
+              </span>
             </div>
-          )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleReview}
+                disabled={reviewing}
+                className="flex-1"
+              >
+                {reviewing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Reviewing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Review
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowGrantQuestion(true)}
+                className="flex-1"
+              >
+                <FileEdit className="mr-2 h-4 w-4" />
+                Grant Draft
+              </Button>
+            </div>
+
+            {error && (
+              <div className="text-xs text-destructive">
+                {error}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
+      {/* Review Dialog */}
       <Dialog open={showReview} onOpenChange={setShowReview}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -190,6 +269,127 @@ export function DocumentCard({ document }: { document: Document }) {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Grant Question Dialog */}
+      <Dialog open={showGrantQuestion} onOpenChange={setShowGrantQuestion}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileEdit className="h-5 w-5 text-primary" />
+              Generate Grant Draft
+            </DialogTitle>
+            <DialogDescription>
+              Enter the grant application question and we'll draft a 300-word response based on {document.title}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="grant-question" className="text-sm font-medium">
+                Grant Application Question
+              </label>
+              <Textarea
+                id="grant-question"
+                placeholder="e.g., Describe your artistic practice and how this grant will support your work..."
+                value={grantQuestion}
+                onChange={(e) => setGrantQuestion(e.target.value)}
+                disabled={generatingGrant}
+                className="min-h-[120px]"
+              />
+            </div>
+
+            {grantError && (
+              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                {grantError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowGrantQuestion(false)
+                  setGrantQuestion('')
+                  setGrantError(null)
+                }}
+                disabled={generatingGrant}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleGenerateGrant}
+                disabled={!grantQuestion.trim() || generatingGrant}
+              >
+                {generatingGrant ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate Draft
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Grant Draft Display Dialog */}
+      <Dialog open={showGrantDraft} onOpenChange={setShowGrantDraft}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileEdit className="h-5 w-5 text-primary" />
+              Grant Draft Response
+            </DialogTitle>
+            <DialogDescription>
+              AI-generated response ({wordCount} words)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Grant Draft Text */}
+            <div className="space-y-2">
+              <div className="p-4 rounded-lg bg-muted/50 border">
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                  {grantDraft}
+                </p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-between items-center pt-4">
+              <span className="text-sm text-muted-foreground">
+                Word count: {wordCount}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleCopyToClipboard}
+                >
+                  {copied ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy to Clipboard
+                    </>
+                  )}
+                </Button>
+                <Button onClick={() => setShowGrantDraft(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>
