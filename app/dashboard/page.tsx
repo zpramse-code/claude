@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { FileText, File, LogOut, Upload } from 'lucide-react'
 import { UploadDocumentDialog } from '@/components/upload-document-dialog'
 import { DocumentCard } from '@/components/document-card'
+import { MidjourneyPromptsDialog } from '@/components/midjourney-prompts-dialog'
 
 async function getDocuments(userId: string) {
   const supabase = await createClient()
@@ -145,7 +146,13 @@ export default async function DashboardPage() {
               A curated collection of your creative works
             </p>
           </div>
-          <UploadDocumentDialog />
+          <div className="flex gap-3">
+            <MidjourneyPromptsDialog
+              hasDocuments={documents.length > 0}
+              documentId={documents.length > 0 ? documents[0].id : undefined}
+            />
+            <UploadDocumentDialog />
+          </div>
         </div>
 
         {/* Documents Grid */}
